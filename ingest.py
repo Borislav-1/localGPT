@@ -1,7 +1,9 @@
 import logging
 import os
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
-
+from langchain.chat_models import ChatOpenAI
+from langchain.document_loaders import TextLoader
+from langchain.embeddings import OpenAIEmbeddings
 import click
 from langchain.docstore.document import Document
 from langchain.embeddings import HuggingFaceInstructEmbeddings
@@ -9,13 +11,23 @@ from langchain.text_splitter import Language, RecursiveCharacterTextSplitter
 from langchain.vectorstores import Chroma
 
 from constants import (
-    CHROMA_SETTINGS,
     DOCUMENT_MAP,
     EMBEDDING_MODEL_NAME,
     INGEST_THREADS,
     PERSIST_DIRECTORY,
     SOURCE_DIRECTORY,
 )
+import openai
+import os
+import logging
+from dotenv import load_dotenv
+load_dotenv()
+# loads dotenv lib to retrieve API keys from .env file
+
+openai.api_key = os.getenv("OPENAI_API_KEY")
+openai.api_base = os.getenv("OPENAI_API_BASE")
+
+embedding = OpenAIEmbeddings(model="text-embedding-ada-002")
 
 
 def load_single_document(file_path: str) -> Document:
@@ -130,22 +142,21 @@ def main(device_type):
     logging.info(f"Split into {len(texts)} chunks of text")
 
     # Create embeddings
-    embeddings = HuggingFaceInstructEmbeddings(
-        model_name=EMBEDDING_MODEL_NAME,
-        model_kwargs={"device": device_type},
-    )
+    # embeddings = HuggingFaceInstructEmbeddings(
+    #     model_name=EMBEDDING_MODEL_NAME,
+    #     model_kwargs={"device": device_type},
+    # )
     # change the embedding type here if you are running into issues.
     # These are much smaller embeddings and will work for most appications
     # If you use HuggingFaceEmbeddings, make sure to also use the same in the
     # run_localGPT.py file.
 
     # embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)
-
+    embeddings = embedding
     db = Chroma.from_documents(
         texts,
         embeddings,
         persist_directory=PERSIST_DIRECTORY,
-        client_settings=CHROMA_SETTINGS,
     )
     db.persist()
     db = None

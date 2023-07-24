@@ -13,3 +13,38 @@ known_first_party = [
     "scripts",
     "hooks",
 ]
+
+[tool.poetry]
+name = "localgpt-mpt"
+version = "0.1.0"
+description = ""
+authors = ["baryslau.yaravy <baryslau.yaravy@azati.com>"]
+readme = "README.md"
+packages = [{include = "localgpt_mpt"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+langchain = "^0.0.240"
+chromadb = "^0.4.2"
+faiss-cpu = "^1.7.4"
+transformers = "^4.31.0"
+docx2txt = "^0.8"
+urllib3 = "^2.0.4"
+requests = "^2.31.0"
+flask = "^2.3.2"
+click = "^8.1.6"
+bitsandbytes = "^0.41.0"
+accelerate = "^0.21.0"
+auto-gptq = "^0.3.0"
+protobuf = "^4.23.4"
+torch = "^2.0.1"
+pdfminer = "^20191125"
+pdfminer-six = "^20221105"
+openai = "^0.27.8"
+tiktoken = "^0.4.0"
+sentencepiece = "^0.1.99"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

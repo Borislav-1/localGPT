@@ -1,23 +1,41 @@
 import logging
 
+import langchain
+from langchain.chat_models import ChatOpenAI
+from langchain.document_loaders import TextLoader
+from langchain.embeddings import OpenAIEmbeddings
+from langchain.indexes import VectorstoreIndexCreator
 import click
-import torch
-from auto_gptq import AutoGPTQForCausalLM
-from huggingface_hub import hf_hub_download
+# import torch
+# from auto_gptq import AutoGPTQForCausalLM
+# from huggingface_hub import hf_hub_download
 from langchain.chains import RetrievalQA
 from langchain.embeddings import HuggingFaceInstructEmbeddings
 from langchain.llms import HuggingFacePipeline, LlamaCpp
+from dotenv import load_dotenv
+import openai
+import os
+load_dotenv()
+
+langchain.debug = True
+
+openai.api_key = os.getenv("OPENAI_API_KEY")
+openai.api_base = os.getenv("OPENAI_API_BASE")
+
+embedding = OpenAIEmbeddings(model="text-embedding-ada-002")
+
+local_llm = ChatOpenAI(model="gpt-3.5-turbo")
 
 # from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from langchain.vectorstores import Chroma
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    GenerationConfig,
-    LlamaForCausalLM,
-    LlamaTokenizer,
-    pipeline,
-)
+# from transformers import (
+#     AutoModelForCausalLM,
+#     AutoTokenizer,
+#     GenerationConfig,
+#     LlamaForCausalLM,
+#     LlamaTokenizer,
+#     pipeline,
+# )
 
 from constants import CHROMA_SETTINGS, EMBEDDING_MODEL_NAME, PERSIST_DIRECTORY
 
@@ -176,8 +194,8 @@ def main(device_type, show_sources):
     logging.info(f"Running on: {device_type}")
     logging.info(f"Display Source Documents set to: {show_sources}")
 
-    embeddings = HuggingFaceInstructEmbeddings(model_name=EMBEDDING_MODEL_NAME, model_kwargs={"device": device_type})
-
+    # embeddings = HuggingFaceInstructEmbeddings(model_name=EMBEDDING_MODEL_NAME, model_kwargs={"device": device_type})
+    embeddings = OpenAIEmbeddings(model="text-embedding-ada-002")
     # uncomment the following line if you used HuggingFaceEmbeddings in the ingest.py
     # embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)
 
@@ -185,7 +203,6 @@ def main(device_type, show_sources):
     db = Chroma(
         persist_directory=PERSIST_DIRECTORY,
         embedding_function=embeddings,
-        client_settings=CHROMA_SETTINGS,
     )
     retriever = db.as_retriever()
 
@@ -222,7 +239,8 @@ def main(device_type, show_sources):
     model_id="TheBloke/Llama-2-7B-Chat-GGML"
     model_basename = "llama-2-7b-chat.ggmlv3.q4_0.bin"
 
-    llm = load_model(device_type, model_id=model_id, model_basename=model_basename)
+    # llm = load_model(device_type, model_id=model_id, model_basename=model_basename)
+    llm = local_llm
 
     qa = RetrievalQA.from_chain_type(llm=llm, chain_type="stuff", retriever=retriever, return_source_documents=True)
     # Interactive questions and answers
