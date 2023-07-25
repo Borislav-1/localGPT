@@ -9,7 +9,7 @@ import click
 # import torch
 # from auto_gptq import AutoGPTQForCausalLM
 # from huggingface_hub import hf_hub_download
-from langchain.chains import RetrievalQA
+from langchain.chains import RetrievalQA, ConversationalRetrievalChain
 from langchain.embeddings import HuggingFaceInstructEmbeddings
 from langchain.llms import HuggingFacePipeline, LlamaCpp
 from dotenv import load_dotenv
@@ -22,9 +22,6 @@ langchain.debug = True
 openai.api_key = os.getenv("OPENAI_API_KEY")
 openai.api_base = os.getenv("OPENAI_API_BASE")
 
-embedding = OpenAIEmbeddings(model="text-embedding-ada-002")
-
-local_llm = ChatOpenAI(model="gpt-3.5-turbo")
 
 # from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from langchain.vectorstores import Chroma
@@ -40,107 +37,107 @@ from langchain.vectorstores import Chroma
 from constants import CHROMA_SETTINGS, EMBEDDING_MODEL_NAME, PERSIST_DIRECTORY
 
 
-def load_model(device_type, model_id, model_basename=None):
-    """
-    Select a model for text generation using the HuggingFace library.
-    If you are running this for the first time, it will download a model for you.
-    subsequent runs will use the model from the disk.
-
-    Args:
-        device_type (str): Type of device to use, e.g., "cuda" for GPU or "cpu" for CPU.
-        model_id (str): Identifier of the model to load from HuggingFace's model hub.
-        model_basename (str, optional): Basename of the model if using quantized models.
-            Defaults to None.
-
-    Returns:
-        HuggingFacePipeline: A pipeline object for text generation using the loaded model.
-
-    Raises:
-        ValueError: If an unsupported model or device type is provided.
-    """
-    logging.info(f"Loading Model: {model_id}, on: {device_type}")
-    logging.info("This action can take a few minutes!")
-
-    if model_basename is not None:
-        if device_type.lower() in ["cpu", "mps"]:
-            logging.info("Using Llamacpp for quantized models")
-            model_path = hf_hub_download(repo_id=model_id, filename=model_basename)
-            if device_type.lower() == "mps":
-                return LlamaCpp(
-                    model_path=model_path,
-                    n_ctx=2048,
-                    max_tokens=2048,
-                    temperature=0,
-                    repeat_penalty=1.15,
-                    n_gpu_layers=1000,
-                )
-            return LlamaCpp(model_path=model_path, n_ctx=2048, max_tokens=2048, temperature=0, repeat_penalty=1.15)
-
-        else:
-            # The code supports all huggingface models that ends with GPTQ and have some variation
-            # of .no-act.order or .safetensors in their HF repo.
-            logging.info("Using AutoGPTQForCausalLM for quantized models")
-
-            if ".safetensors" in model_basename:
-                # Remove the ".safetensors" ending if present
-                model_basename = model_basename.replace(".safetensors", "")
-
-            tokenizer = AutoTokenizer.from_pretrained(model_id, use_fast=True)
-            logging.info("Tokenizer loaded")
-
-            model = AutoGPTQForCausalLM.from_quantized(
-                model_id,
-                model_basename=model_basename,
-                use_safetensors=True,
-                trust_remote_code=True,
-                device="cuda:0",
-                use_triton=False,
-                quantize_config=None,
-            )
-    elif (
-        device_type.lower() == "cuda"
-    ):  # The code supports all huggingface models that ends with -HF or which have a .bin
-        # file in their HF repo.
-        logging.info("Using AutoModelForCausalLM for full models")
-        tokenizer = AutoTokenizer.from_pretrained(model_id)
-        logging.info("Tokenizer loaded")
-
-        model = AutoModelForCausalLM.from_pretrained(
-            model_id,
-            device_map="auto",
-            torch_dtype=torch.float16,
-            low_cpu_mem_usage=True,
-            trust_remote_code=True,
-            # max_memory={0: "15GB"} # Uncomment this line with you encounter CUDA out of memory errors
-        )
-        model.tie_weights()
-    else:
-        logging.info("Using LlamaTokenizer")
-        tokenizer = LlamaTokenizer.from_pretrained(model_id)
-        model = LlamaForCausalLM.from_pretrained(model_id)
-
-    # Load configuration from the model to avoid warnings
-    generation_config = GenerationConfig.from_pretrained(model_id)
-    # see here for details:
-    # https://huggingface.co/docs/transformers/
-    # main_classes/text_generation#transformers.GenerationConfig.from_pretrained.returns
-
-    # Create a pipeline for text generation
-    pipe = pipeline(
-        "text-generation",
-        model=model,
-        tokenizer=tokenizer,
-        max_length=2048,
-        temperature=0,
-        top_p=0.95,
-        repetition_penalty=1.15,
-        generation_config=generation_config,
-    )
-
-    local_llm = HuggingFacePipeline(pipeline=pipe)
-    logging.info("Local LLM Loaded")
-
-    return local_llm
+# def load_model(device_type, model_id, model_basename=None):
+#     """
+#     Select a model for text generation using the HuggingFace library.
+#     If you are running this for the first time, it will download a model for you.
+#     subsequent runs will use the model from the disk.
+#
+#     Args:
+#         device_type (str): Type of device to use, e.g., "cuda" for GPU or "cpu" for CPU.
+#         model_id (str): Identifier of the model to load from HuggingFace's model hub.
+#         model_basename (str, optional): Basename of the model if using quantized models.
+#             Defaults to None.
+#
+#     Returns:
+#         HuggingFacePipeline: A pipeline object for text generation using the loaded model.
+#
+#     Raises:
+#         ValueError: If an unsupported model or device type is provided.
+#     """
+#     logging.info(f"Loading Model: {model_id}, on: {device_type}")
+#     logging.info("This action can take a few minutes!")
+#
+#     if model_basename is not None:
+#         if device_type.lower() in ["cpu", "mps"]:
+#             logging.info("Using Llamacpp for quantized models")
+#             model_path = hf_hub_download(repo_id=model_id, filename=model_basename)
+#             if device_type.lower() == "mps":
+#                 return LlamaCpp(
+#                     model_path=model_path,
+#                     n_ctx=2048,
+#                     max_tokens=2048,
+#                     temperature=0,
+#                     repeat_penalty=1.15,
+#                     n_gpu_layers=1000,
+#                 )
+#             return LlamaCpp(model_path=model_path, n_ctx=2048, max_tokens=2048, temperature=0, repeat_penalty=1.15)
+#
+#         else:
+#             # The code supports all huggingface models that ends with GPTQ and have some variation
+#             # of .no-act.order or .safetensors in their HF repo.
+#             logging.info("Using AutoGPTQForCausalLM for quantized models")
+#
+#             if ".safetensors" in model_basename:
+#                 # Remove the ".safetensors" ending if present
+#                 model_basename = model_basename.replace(".safetensors", "")
+#
+#             tokenizer = AutoTokenizer.from_pretrained(model_id, use_fast=True)
+#             logging.info("Tokenizer loaded")
+#
+#             model = AutoGPTQForCausalLM.from_quantized(
+#                 model_id,
+#                 model_basename=model_basename,
+#                 use_safetensors=True,
+#                 trust_remote_code=True,
+#                 device="cuda:0",
+#                 use_triton=False,
+#                 quantize_config=None,
+#             )
+#     elif (
+#         device_type.lower() == "cuda"
+#     ):  # The code supports all huggingface models that ends with -HF or which have a .bin
+#         # file in their HF repo.
+#         logging.info("Using AutoModelForCausalLM for full models")
+#         tokenizer = AutoTokenizer.from_pretrained(model_id)
+#         logging.info("Tokenizer loaded")
+#
+#         model = AutoModelForCausalLM.from_pretrained(
+#             model_id,
+#             device_map="auto",
+#             torch_dtype=torch.float16,
+#             low_cpu_mem_usage=True,
+#             trust_remote_code=True,
+#             # max_memory={0: "15GB"} # Uncomment this line with you encounter CUDA out of memory errors
+#         )
+#         model.tie_weights()
+#     else:
+#         logging.info("Using LlamaTokenizer")
+#         tokenizer = LlamaTokenizer.from_pretrained(model_id)
+#         model = LlamaForCausalLM.from_pretrained(model_id)
+#
+#     # Load configuration from the model to avoid warnings
+#     generation_config = GenerationConfig.from_pretrained(model_id)
+#     # see here for details:
+#     # https://huggingface.co/docs/transformers/
+#     # main_classes/text_generation#transformers.GenerationConfig.from_pretrained.returns
+#
+#     # Create a pipeline for text generation
+#     pipe = pipeline(
+#         "text-generation",
+#         model=model,
+#         tokenizer=tokenizer,
+#         max_length=2048,
+#         temperature=0,
+#         top_p=0.95,
+#         repetition_penalty=1.15,
+#         generation_config=generation_config,
+#     )
+#
+#     local_llm = HuggingFacePipeline(pipeline=pipe)
+#     logging.info("Local LLM Loaded")
+#
+#     return local_llm
 
 
 # chose device typ to run on as well as to show source documents.
@@ -201,10 +198,10 @@ def main(device_type, show_sources):
 
     # load the vectorstore
     db = Chroma(
-        persist_directory=PERSIST_DIRECTORY,
         embedding_function=embeddings,
+        persist_directory=PERSIST_DIRECTORY,
     )
-    retriever = db.as_retriever()
+    retriever = db.as_retriever(search_kwargs={'k': 6})
 
     # load the LLM for generating Natural Language responses
 
@@ -235,14 +232,24 @@ def main(device_type, show_sources):
     # model_basename = "wizard-vicuna-13B.ggmlv3.q2_K.bin"
     # model_id = "TheBloke/orca_mini_3B-GGML"
     # model_basename = "orca-mini-3b.ggmlv3.q4_0.bin"
-
-    model_id="TheBloke/Llama-2-7B-Chat-GGML"
-    model_basename = "llama-2-7b-chat.ggmlv3.q4_0.bin"
+    #
+    # model_id="TheBloke/Llama-2-7B-Chat-GGML"
+    # model_basename = "llama-2-7b-chat.ggmlv3.q4_0.bin"
 
     # llm = load_model(device_type, model_id=model_id, model_basename=model_basename)
-    llm = local_llm
+    llm = ChatOpenAI(model="gpt-3.5-turbo")
 
     qa = RetrievalQA.from_chain_type(llm=llm, chain_type="stuff", retriever=retriever, return_source_documents=True)
+    #
+    # vectordb = Chroma(persist_directory=PERSIST_DIRECTORY)
+    # vectordb.persist()
+
+    # qa = ConversationalRetrievalChain.from_llm(
+    #     ChatOpenAI(temperature=0.9, model_name="gpt-3.5-turbo"),
+    #     vectordb.as_retriever(search_kwargs={'k': 6}),
+    #     return_source_documents=True,
+    #     verbose=False
+    # )
     # Interactive questions and answers
     while True:
         query = input("\nEnter a query: ")

@@ -27,7 +27,7 @@ load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 openai.api_base = os.getenv("OPENAI_API_BASE")
 
-embedding = OpenAIEmbeddings(model="text-embedding-ada-002")
+
 
 
 def load_single_document(file_path: str) -> Document:
@@ -152,14 +152,14 @@ def main(device_type):
     # run_localGPT.py file.
 
     # embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)
-    embeddings = embedding
+    embedding = OpenAIEmbeddings(model="text-embedding-ada-002")
     db = Chroma.from_documents(
         texts,
-        embeddings,
+        embedding,
         persist_directory=PERSIST_DIRECTORY,
     )
     db.persist()
-    db = None
+    # db = None
 
 
 if __name__ == "__main__":
